@@ -28,3 +28,11 @@
 
 
 
+- 小deadline (1/5)
+- 遊戲方面(楊佳翰)
+- client + database (陳威達)
+- main server (詹凱揚)
+
+
+
+
