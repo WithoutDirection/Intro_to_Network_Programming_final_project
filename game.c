@@ -79,7 +79,7 @@ int gui(int *const piece)
             break;
         case 2:
         case -2:
-            printf("\033[32m┼ \033[0m");
+            printf("┼ ");
             break;
         default:
             printf("┼ ");
@@ -148,9 +148,10 @@ int place(int *const piece, int *const piece_last, const int color)
     int row = 0, col = 0;
     char ch1, ch2;
     printf("現在是%s方的回合\n", color == 1 ? "黑" : "白");
-    fflush(stdin);
+    // fflush(stdin);
 
-    scanf(" %c%c", &ch1, &ch2);
+    scanf(" %c", &ch1);
+    printf("row:%c\n", ch1);
 
     if (ch1 == 'R' || ch1 == 'r')
         return -1;
@@ -160,17 +161,21 @@ int place(int *const piece, int *const piece_last, const int color)
         row = ch1 + 1 - 'A';
     else if (ch1 >= 'a' && ch1 <= 'h')
         row = ch1 + 1 - 'a';
-    else if (ch1 >= 1 && ch1 <= 8)
-        row = ch1;
-
+    else if (ch1 >= '1' && ch1 <= '8')
+        row = ch1 - '0';
+        
+    scanf(" %c", &ch2);
+    printf("col:%c\n", ch2);
     if (ch2 >= 'A' && ch2 <= 'H')
         col = ch2 + 1 - 'A';
     else if (ch2 >= 'a' && ch2 <= 'h')
         col = ch2 + 1 - 'a';
-    else if (ch2 >= 1 && ch2 <= 8)
-        col = ch2;
+    else if (ch2 >= '1' && ch2 <= '8')
+        col = ch2 - '0';
 
-    printf("%d %d\n", row, col);
+    // printf("%d %d\n", row, col);
+    // while (getchar())
+    //     ;
 
     if (!BOUNDARY(row, col))
         return -2;
@@ -194,7 +199,7 @@ int place(int *const piece, int *const piece_last, const int color)
             {
                 if (piece[rowp * 8 + colp - 9] != -color)
                     break;
-                else if (BOUNDARY(rowp + dx, colp + dy) && piece[(rowp + dx * 8) + colp + dy - 9] == color)
+                else if (BOUNDARY(rowp + dx, colp + dy) && piece[(rowp + dx) * 8 + colp + dy - 9] == color)
                     for (; rowp != row || colp != col; rowp -= dx, colp -= dy)
                         piece[rowp * 8 + colp - 9] = color;
             }
@@ -221,11 +226,11 @@ start:
         if (sign <= -2)
             info(piece, sign, color);
         sign = place(piece, piece_last, color);
+        gui(piece);
         if (sign == -1)
             sign = -5;
     } while (sign <= -1);
-
-    puts("first input");
+    color *= -1;
     while (1)
     {
         if (search(piece, color *= 1) || (sign += 80, search(piece, color *= -1)))
@@ -235,12 +240,14 @@ start:
                 gui(piece);
                 info(piece, sign, color);
                 sign = place(piece, piece_last, color);
+                gui(piece);
                 if (sign == -1)
                     sign = retract(piece, piece_last);
             } while (sign <= -2);
         }
         else
             break;
+        color *= -1;
     }
     int outcome = gui(piece);
     printf("%s方: [%c%c]\n", color == 1 ? "黑" : "白", sign / 8 + 'A', sign % 8 + '1');
