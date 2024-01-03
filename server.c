@@ -87,13 +87,19 @@ int login(char *account, char *password){
     while((ptr = readdir(dir)) != NULL){
         if(strcmp(ptr->d_name, ".") == 0 || strcmp(ptr->d_name, "..") == 0)continue;
         if(strcmp(ptr->d_name, account) == 0){
-            // find the account folder and then find the "password.txt"
-            char account_path[100];
-            sprintf(account_path, "%s%s", path, account);
-            FILE *fp = fopen(account_path, "r");
-            // enter the account folder and check the password
+            char password_file_path[200];
+            sprintf(password_file_path, "%s%s/%s", path, account, "password.txt");
+
+            FILE *fp = fopen(password_file_path, "r");
+            if(fp == NULL){
+                printf("cannot open the file\n");
+                // cannot open the file
+                return 0;
+            }
+
             char correct_password[100];
-            fscanf(fp, "%s", correct_password);
+            fgets(correct_password, 100, fp);
+            fclose(fp);
             if(strcmp(correct_password, password) == 0){
                 // correct passwordm return 
                 return 1;
@@ -110,27 +116,31 @@ int login(char *account, char *password){
 }
 
 int register_account(char *account, char *password){
+    // printf("account: %s, password: %s", account, password);
     char path[100] = "./user/";
     char account_path[100];
+    char password_file_path[200];
     // check if the account name has been used and the the folder exists
     DIR *dir;
     struct dirent *ptr;
+    // printf("path = %s\n", path);
     dir = opendir(path);
+    printf("find whether the account name: %s has been used\n", account);
     while((ptr = readdir(dir)) != NULL){
+        // printf("ptr->d_name = %s\n", ptr->d_name);
         if(strcmp(ptr->d_name, ".") == 0 || strcmp(ptr->d_name, "..") == 0)continue;
         if(strcmp(ptr->d_name, account) == 0){
             // find the account
             return 0;
         }
     }
+    // printf("the account name has not been used\n");
     // create the account folder and set the password as a txt file
     sprintf(account_path, "%s%s", path, account);
     mkdir(account_path, 0777);
-    FILE *fp = fopen(account_path, "w");
-    // create the password.txt
+    sprintf(password_file_path, "%s/%s", account_path, "password.txt");
+    FILE *fp = fopen(password_file_path, "w");
     fprintf(fp, "%s", password);
-    // create the rank.txt
-    fprintf(fp, "%d", 0);
     fclose(fp);
     return 1;
     
@@ -262,7 +272,7 @@ void *funct(int *arg ){
                 sprintf(sendline[i], "Wrong password. Please try again\n");
                 Write(connfd[i], sendline[i], strlen(sendline[i]));
                 printf("send to %s: %s\n", ip[i], sendline[i]);
-                goto stage2;
+                goto stage1;
             }
 
         }
@@ -270,12 +280,14 @@ void *funct(int *arg ){
     else if(mode == 2){
         sprintf(sendline[i], "Please enroll your account and password in format: <account> <password>\n");
         Write(connfd[i], sendline[i], strlen(sendline[i]));
-        if(n = Read(connfd[i], recvline[i], MAXLINE) == 0) goto terminate_prematurely;
+        if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
         else{
+            recvline[i][n] = '\0';
             sscanf(recvline[i], "%s %s", account, password);
+            // printf("receive account: %s, password: %s\n", account, password);
             // enroll the account in the user folder
             if(register_account(account, password)){
-                sprintf(sendline[i], "Register successfully! Login automatically.\n");
+                sprintf(sendline[i], "Register successfully! Login automatically.");
                 Write(connfd[i], sendline[i], strlen(sendline[i]));
             }
             else{

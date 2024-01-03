@@ -34,8 +34,6 @@ void cli(FILE *fp, int sockfd){
     }
    
     scanf("%d", &mode); // change the enter string to int
-    
-    // change the enter string to int
 
 
     if(mode == 1){
@@ -61,6 +59,7 @@ void cli(FILE *fp, int sockfd){
         recvline[n] = '\0';
         printf("recv: %s\n", recvline);
         if(mode == 1){
+            // login in
             char id[100], password[100];
             scanf("%s %s", id, password);
             sprintf(sendline, "%s %s", id, password);
@@ -80,7 +79,27 @@ void cli(FILE *fp, int sockfd){
             }
             
 
-        } 
+        }
+        else{
+            // register
+            char id[100], password[100];
+            scanf("%s %s", id, password);
+            sprintf(sendline, "%s %s", id, password);
+            printf("Send: %s\n", sendline);
+            Write(sockfd, sendline, strlen(sendline));
+            if((n = Read(sockfd, recvline, MAXLINE)) == 0) goto terminate_prematurely;
+            else{
+                recvline[n] = '\0';
+                printf("recv: %s\n", recvline);
+                if(strcmp(recvline, "Register successfully! Login automatically.") == 0){
+                    // goto stage3;
+                }
+                else{
+                    printf("Register failed\n");
+                    goto stage2;
+                }
+            }
+        }
     }
 
     terminate_prematurely: printf("Server terminated prematurely\n");
