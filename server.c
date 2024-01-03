@@ -59,7 +59,7 @@ int check_the_cmd(char *cmd){
     // check if the cmd is number
     int is_num = 1;
     for(int i = 0; i < strlen(cmd); i++){
-        if(cmd[i] == " ")continue;
+        if(cmd[i] == ' ')continue;
         if(cmd[i] < '0' || cmd[i] > '9'){
             is_num = 0;
             break;
@@ -69,7 +69,13 @@ int check_the_cmd(char *cmd){
         return -1;
     }
     else{
-        return atoi(cmd);
+        // change the cmd string to int
+        int num = 0;
+        for(int i = 0; i < strlen(cmd); i++){
+            if(cmd[i] == ' ')continue;
+            num = num * 10 + cmd[i] - '0';
+        }
+        return num;
     }
 }
 
@@ -222,12 +228,13 @@ void *funct(int *arg ){
     sprintf(sendline[i], "Connect successfully!\nPress 1 to login\nPress 2 to register a new account and then login\n");
     Write(connfd[i], sendline[i], strlen(sendline[i]));
     printf("send to %s: %s\n", ip[i], sendline[i]);
-    if(n = Read(connfd[i], recvline[i], MAXLINE) == 0) goto terminate_prematurely;
+    if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
     else{
         recvline[i][n] = '\0';
         printf("receive from %s: %s\n", ip[i], recvline[i]);
         // check if the received is a number
         mode = check_the_cmd(recvline[i]);
+        printf("receive mode = %d\n", mode);
         if(mode == -1){
             printf("wrong command, please try again\n");
         }
@@ -238,14 +245,15 @@ void *funct(int *arg ){
     char account[100], password[100];
     if(mode == 1){
         sprintf(sendline[i], "Please enter your account and password in format: <account> <password>\n");
+        printf("send to %s: %s\n", ip[i], sendline[i]);
         Write(connfd[i], sendline[i], strlen(sendline[i]));
-        if(n = Read(connfd[i], recvline[i], MAXLINE) == 0) goto terminate_prematurely;
+        if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
         else{
             sscanf(recvline[i], "%s %s", account, password);
             // find the account in the user folder
             if(login(account, password) == 1){
                 // correct password
-                sprintf(sendline[i], "Login successfully!\n");
+                sprintf(sendline[i], "Login successfully!");
                 Write(connfd[i], sendline[i], strlen(sendline[i]));
                 printf("send to %s: %s\n", ip[i], sendline[i]);
             }
@@ -381,6 +389,7 @@ void *funct(int *arg ){
     is_used[i] = 0;
     sem_post(&is_used_sem);
     sem_post(&connfd_sem);
+    printf("=========================================\n");
     pthread_exit(NULL);
 
         
@@ -437,7 +446,9 @@ int main(){
                     Inet_ntop(AF_INET, &cliaddr.sin_addr, ip[i], sizeof(ip[i]));
                     Read(connfd[i], recvline[i], MAXLINE);
                     printf("receive from %s: %s\n", ip[i], recvline[i]);
-                    pthread_create(&thread[i], NULL, (void *) &funct, (void *) i);
+                    int *idx = (int *)malloc(sizeof(int));
+                    *idx = i;
+                    pthread_create(&thread[i], NULL, (void *) funct, idx);
                     printf("====================================\n");
                     break;
                     
