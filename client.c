@@ -101,7 +101,67 @@ void cli(FILE *fp, int sockfd){
             }
         }
     }
-
+    stage3: printf("===========================stage 3===============================\n"); // stage 3: choose the function
+    clear_recv_send(recvline, sendline);
+    if((n = Read(sockfd, recvline, MAXLINE)) == 0) goto terminate_prematurely;
+    else{
+        recvline[n] = '\0';
+        printf("recv: %s\n", recvline);
+    }
+    scanf("%d", &mode); // change the enter string to int
+    if(mode == 1){
+        sprintf(sendline, "%s", "1");
+        printf("Send: %s", sendline);
+        Write(sockfd, sendline, strlen(sendline));
+        if((n = Read(sockfd, recvline, MAXLINE)) == 0) goto terminate_prematurely;
+        else{
+            recvline[n] = '\0';
+            printf("recv: %s\n", recvline);
+            if(strcmp(recvline,"Cannot find an online opponent.\nPlease try again later or create an empty room\n") == 0){
+                goto stage3;
+            }
+            else{
+                printf("Enter the game\n");
+                // todo: enter the game
+            }
+        }
+    }
+    else if(mode == 2){
+        sprintf(sendline, "%s", "2");
+        printf("Send: %s\n", sendline);
+        Write(sockfd, sendline, strlen(sendline));
+        if((n = Read(sockfd, recvline, MAXLINE)) == 0) goto terminate_prematurely;
+        else{
+            recvline[n] = '\0';
+            printf("recv: %s\n", recvline);
+            if(strcmp(recvline,"Cannot create a room.\nPlease try again later") == 0){
+                goto stage3;
+            }
+            else{
+                printf("wait for another player\n");
+                // todo: enter the game
+            }
+        }
+    }
+    else if(mode == 3){
+        sprintf(sendline, "%s", "3");
+        printf("Send: %s", sendline);
+        Write(sockfd, sendline, strlen(sendline));
+    }
+    else if(mode == 4){
+        sprintf(sendline, "%s", "4");
+        printf("Send: %s", sendline);
+        Write(sockfd, sendline, strlen(sendline));
+    }
+    else if(mode == 5){
+        sprintf(sendline, "%s", "5");
+        printf("Send: %s", sendline);
+        Write(sockfd, sendline, strlen(sendline));
+    }
+    else{
+        printf("Invalid input\n");
+        goto stage3;
+    }
     terminate_prematurely: printf("Server terminated prematurely\n");
         return;
 }

@@ -138,9 +138,16 @@ int register_account(char *account, char *password){
     // create the account folder and set the password as a txt file
     sprintf(account_path, "%s%s", path, account);
     mkdir(account_path, 0777);
+    // create the password file
     sprintf(password_file_path, "%s/%s", account_path, "password.txt");
     FILE *fp = fopen(password_file_path, "w");
     fprintf(fp, "%s", password);
+    fclose(fp);
+    // create the rank file
+    char rank_file_path[200];
+    sprintf(rank_file_path, "%s/%s", account_path, "rank.txt");
+    fp = fopen(rank_file_path, "w");
+    fprintf(fp, "%d", 0);
     fclose(fp);
     return 1;
     
@@ -154,10 +161,12 @@ int find_an_onlone_opponent(int i){
     char account_path[100], rank_path[100];
     sprintf(account_path, "%s%s", path, online_account[i]);
     sprintf(rank_path, "%s/rank.txt", account_path);
+    printf("rank_path = %s\n", rank_path);
     FILE *fp = fopen(rank_path, "r");
     int rank;
     fscanf(fp, "%d", &rank);
     fclose(fp);
+    printf("the rank of %s is %d\n", online_account[i], rank);
     // find the opponent with the min rank difference
     int min_rank_diff = 1000000;
     for(int j = 0; j < max_client_num/2; j++){
@@ -170,6 +179,8 @@ int find_an_onlone_opponent(int i){
             }
         }
     }
+    printf("min_rank_diff = %d\n", min_rank_diff);
+    printf("find opponent_idx = %d\n", opponent);
     // if cannot find an opponent, return -1
     if(opponent == -1){
         return -1;
@@ -193,6 +204,7 @@ int create_room(){
             break;
         }
     }
+    printf("find room_idx = %d\n", room_idx);
     if(room_idx == -1){
         return -1;
     }
@@ -306,10 +318,11 @@ void *funct(int *arg ){
     stage3: printf("=========================stage 3=================================\n"); // stage 3: choose the function
 
     clear_recv_send(i);
-    sprintf(sendline[i], "Find an online opponent: press 1\nCreate an empty room: press2\nEnter a room with room id: press 3\nReview the history game: press 4\nPlay with AI: press 5\n");
+    sprintf(sendline[i], "Press 1: Find an online opponent\nPress 2: Create an empty room\nPress 3: Enter a room with room id\nPress 4: Review the history game\nPress 5: Play with AI\n");
     Write(connfd[i], sendline[i], strlen(sendline[i]));
     printf("send to %s: %s\n", ip[i], sendline[i]);
-    if(n = Read(connfd[i], recvline[i], MAXLINE) == 0) goto terminate_prematurely;
+
+    if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
     else{
         recvline[i][n] = '\0';
         printf("receive from %s: %s\n", ip[i], recvline[i]);
@@ -320,7 +333,7 @@ void *funct(int *arg ){
             goto stage3;
         }
     }
-
+    printf("mode = %d\n", mode);
     clear_recv_send(i);
 
     if(mode == 1){
@@ -340,7 +353,7 @@ void *funct(int *arg ){
     else if(mode == 2){
         return_value = create_room();
         if(return_value == -1){
-            sprintf(sendline[i], "Cannot create a room.\nPlease try again later\n");
+            sprintf(sendline[i], "Cannot create a room.\nPlease try again later");
             Write(connfd[i], sendline[i], strlen(sendline[i]));
             // printf("send to %s: %s\n", ip[i], sendline[i]);
             goto stage3;
