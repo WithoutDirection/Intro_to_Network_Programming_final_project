@@ -9,7 +9,7 @@
 #include <string.h>
 #include <math.h>
 
-// test
+
 
 
 #define max_client_num 10
@@ -18,8 +18,11 @@ int is_used[max_client_num] = {0};
 char online_account[max_client_num][100];
 char ip[max_client_num][100];
 int  connfd[max_client_num];
+int  color[10];
 char sendline[max_client_num][MAXLINE], recvline[max_client_num][MAXLINE];
 pthread_t thread[max_client_num];
+sem_t waiting_sem[max_client_num];
+sem_t is_used_sem, connfd_sem;
 
 typedef struct room room_t;
 
@@ -27,21 +30,14 @@ struct room{
     int people_num;
     int room_id;
     char player1[100], player2[100];
-    int player1_rank, player2_rank;     
+    int player1_rank, player2_rank;
+    int player1_connfd, player2_connfd;
+    int now_turn;
+
 };
 
 room_t room_list[max_client_num/2];
 
-void init_room_list(){
-    for(int i = 0; i < max_client_num/2; i++){
-        room_list[i].people_num = 0;
-        room_list[i].room_id = i;
-        room_list[i].player1_rank = 0;
-        room_list[i].player2_rank = 0;
-    }
-}
-
-sem_t is_used_sem, connfd_sem;
 void sig_chld(int signo){
     pid_t pid;
     int stat;
@@ -49,6 +45,34 @@ void sig_chld(int signo){
         ;
     return;
 }
+
+// ==============================room related function==============================
+
+void init_room_list(){
+    for(int i = 0; i < max_client_num/2; i++){
+        room_list[i].people_num = 0;
+        room_list[i].room_id = i;
+        room_list[i].player1_rank = 0;
+        room_list[i].player2_rank = 0;
+        room_list[i].player1_connfd = -1;
+        room_list[i].player2_connfd = -1;
+        room_list[i].now_turn = 1;
+    }
+}
+
+void print_room_info(int idx){
+    printf("room_id: %d\n", room_list[idx].room_id);
+    printf("people_num: %d\n", room_list[idx].people_num);
+    printf("player1: %s\n", room_list[idx].player1);
+    printf("player2: %s\n", room_list[idx].player2);
+    printf("player1_rank: %d\n", room_list[idx].player1_rank);
+    printf("player2_rank: %d\n", room_list[idx].player2_rank);
+
+}
+
+//=================================================================================
+
+// ==============================socket related function============================
 
 void clear_recv_send(int i){
     bzero(recvline[i], MAXLINE);
@@ -79,6 +103,10 @@ int check_the_cmd(char *cmd){
     }
 }
 
+
+//=================================================================================
+
+// ==============================account related function==============================
 int login(char *account, char *password){
     DIR *dir;
     struct dirent *ptr;
@@ -153,6 +181,10 @@ int register_account(char *account, char *password){
     
 }
 
+//=================================================================================
+
+// ==============================game related function==============================
+
 int find_an_onlone_opponent(int i){
     // find an online opponent
     int opponent = -1;
@@ -190,12 +222,13 @@ int find_an_onlone_opponent(int i){
     room_list[opponent].people_num = 2;
     strcpy(room_list[opponent].player2, online_account[i]);
     room_list[opponent].player2_rank = rank;
+    room_list[opponent].player2_connfd = connfd[i];
 
     return opponent;
     
 }
 
-int create_room(){
+int create_room(int user_idx){
     // create an empty room
     int room_idx = -1;
     for(int i = 0; i < max_client_num/2; i++){
@@ -214,7 +247,6 @@ int create_room(){
         int room_id = rand() % 1000;
         room_id = pow(room_id, 2) - 1;
         room_list[room_idx].room_id = room_id;
-
         room_list[room_idx].people_num = 1;
         strcpy(room_list[room_idx].player1, online_account[room_idx]);
         // load the rank of the player
@@ -227,6 +259,8 @@ int create_room(){
         fscanf(fp, "%d", &rank);
         fclose(fp);
         room_list[room_idx].player1_rank = rank;
+        room_list[room_idx].player1_connfd = connfd[room_idx];
+
         return room_idx;
     }
 }
@@ -240,6 +274,57 @@ int find_room_by_id(int room_id){
     return -1;
 }
 
+int game_progressing(int color, int room_idx){
+    int return_case = 1; // 0: game end; 1: black turn; -1: white turn
+    // check which connfd this player is
+    int my_connfd, opponent_connfd;
+    char sendline[100], recvline[100];
+    if(color == 1){
+        my_connfd = room_list[room_idx].player1_connfd;
+        opponent_connfd = room_list[room_idx].player2_connfd;
+    }
+    else{
+        my_connfd = room_list[room_idx].player2_connfd;
+        opponent_connfd = room_list[room_idx].player1_connfd;
+    }
+    while(return_case != 0){
+        // wait until the color is the now_turn
+        while(room_list[room_idx].now_turn != color){
+            sleep(1);
+        }
+       // Read where the player want to put the chess
+        int n = Read(my_connfd, recvline, MAXLINE);
+        recvline[n] = '\0';
+        printf("receive from %s: %s\n", ip[room_idx], recvline);
+        // Send the location to the opponent
+        sprintf(sendline, "%s", recvline);
+        Write(opponent_connfd, sendline, strlen(sendline));
+        // return the ack to the player
+        sprintf(sendline, "ack");
+        Write(my_connfd, sendline, strlen(sendline));
+        // Read what turn it should be, check by the opponent
+        n = Read(my_connfd, recvline, MAXLINE);
+        recvline[n] = '\0';
+        printf("receive from %s: %s\n", ip[room_idx], recvline);
+        // change the now_turn by recvline
+        if(strcmp(recvline, "1") == 0){
+            room_list[room_idx].now_turn = 1;
+        }
+        else if(strcmp(recvline, "-1") == 0){
+            room_list[room_idx].now_turn = -1;
+        }
+        else if(strcmp(recvline, "0") == 0){
+            // game end
+            room_list[room_idx].now_turn  = 0;
+        }
+        else{
+            printf("error\n");
+        }
+        return_case = room_list[room_idx].now_turn;
+    }
+}
+
+//=================================================================================
 void *funct(int *arg ){
     int i = *arg, n, mode, return_value;
     clear_recv_send(i);
@@ -318,10 +403,17 @@ void *funct(int *arg ){
     stage3: printf("=========================stage 3=================================\n"); // stage 3: choose the function
 
     clear_recv_send(i);
+    n = Read(connfd[i], recvline[i], MAXLINE); // Read ack
+    recvline[i][n] = '\0';
+    printf("receive from %s: %s\n", ip[i], recvline[i]);
+    if(strcmp(recvline[i], "ack") != 0){
+        printf("ack error\n");
+        goto terminate_prematurely;
+    }
     sprintf(sendline[i], "Press 1: Find an online opponent\nPress 2: Create an empty room\nPress 3: Enter a room with room id\nPress 4: Review the history game\nPress 5: Play with AI\n");
     Write(connfd[i], sendline[i], strlen(sendline[i]));
-    printf("send to %s: %s\n", ip[i], sendline[i]);
-
+    printf("send to %s:\n %s\n", ip[i], sendline[i]);
+    printf("test1\n");
     if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
     else{
         recvline[i][n] = '\0';
@@ -335,8 +427,54 @@ void *funct(int *arg ){
     }
     printf("mode = %d\n", mode);
     clear_recv_send(i);
-
-    if(mode == 1){
+    //********test**********
+    
+    printf("\n now we are going to test \n");
+    if( mode == 0 ){
+    	int check=0;
+    	printf("giving the color\n");
+    	for(int aaa=0 ; aaa<10 ; aaa++){
+    	   if(color[aaa] != 0){
+    	   	printf("the %a is not zero\n",aaa);
+    	   	check=1;
+    	   	break;
+    	   	
+    	   }
+    	}
+    	if(check==0){
+    	  color[i]=1;
+    	}else{
+    	  color[i]=2;
+    	}
+    	if(color[i]==1){
+    	  sprintf(sendline[i],"1");
+    	  Write(connfd[i], sendline[i], strlen(sendline[i]));
+    	  printf("one\n");
+    	}else if(color[i]==2){
+    	  sprintf(sendline[i],"2");
+    	  Write(connfd[i], sendline[i], strlen(sendline[i]));
+    	  printf("two\n");
+    	}
+    	int give;
+    	if(i==0){
+    	   give=1;
+    	}else if(i==1){
+    	   give=0;	
+    	}
+    	for(;;){
+    	   printf("waiting for the location\n");
+    	   if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
+    	   else{
+    	   	recvline[i][n] = '\0';
+    	   	printf("the location is: %s\n",recvline[i][n]);
+    	   	sprintf(sendline[i],"%s",recvline[i]);
+    	   	Write(connfd[give], sendline[i], strlen(sendline[i]));
+    	  }
+    	}
+    	//to be continue;
+    	
+    }
+    else if(mode == 1){
         return_value = find_an_onlone_opponent(i);
         if(return_value == -1){
             sprintf(sendline[i], "Cannot find an online opponent.\nPlease try again later or create an empty room\n");
@@ -351,7 +489,7 @@ void *funct(int *arg ){
         }
     }
     else if(mode == 2){
-        return_value = create_room();
+        return_value = create_room(i);
         if(return_value == -1){
             sprintf(sendline[i], "Cannot create a room.\nPlease try again later");
             Write(connfd[i], sendline[i], strlen(sendline[i]));
@@ -361,20 +499,25 @@ void *funct(int *arg ){
         else{
             sprintf(sendline[i], "Create a room successfully!\nYour room id is %d\n", room_list[return_value].room_id);
             Write(connfd[i], sendline[i], strlen(sendline[i]));
+            while(room_list[return_value].people_num == 1){
+                sleep(1);
+            }
+            sprintf(sendline[i] , "Enter the game\n");
+            Write(connfd[i], sendline[i], strlen(sendline[i]));
         }
     }
     else if(mode == 3){
         int room_id;
         sprintf(sendline[i], "Please enter the room id\n");
         Write(connfd[i], sendline[i], strlen(sendline[i]));
-        if(n = Read(connfd[i], recvline[i], MAXLINE) == 0) goto terminate_prematurely;
+        if((n = Read(connfd[i], recvline[i], MAXLINE)) == 0) goto terminate_prematurely;
         else{
             recvline[i][n] = '\0';
             printf("receive from %s: %s\n", ip[i], recvline[i]);
             // check if the received is a number
             room_id = check_the_cmd(recvline[i]);
             if(room_id == -1){
-                printf("wrong command, please try again\n");
+                printf("Invalid room_id, please try again\n");
                 goto stage3;
             }
             else{
@@ -400,14 +543,48 @@ void *funct(int *arg ){
                     fscanf(fp, "%d", &rank);
                     fclose(fp);
                     room_list[return_value].player2_rank = rank;
-                    
+                    // wait for the opponent
+                    print_room_info(return_value);
+                    printf("Enter the game\n");
                 }
             
             }
         }
     }
 
+    stage4: printf("=========================stage 4=================================\n"); // stage 4: game
+    // receive the ack
+    n = Read(connfd[i], recvline[i], MAXLINE);
+    recvline[i][n] = '\0';
+    printf("receive from %s: %s\n", ip[i], recvline[i]);
+    if(strcmp(recvline[i], "ack") != 0){
+        printf("ack error\n");
+        goto terminate_prematurely;
+    }
+    clear_recv_send(i);
+    
+    // decide the color
+    if(strcmp(room_list[return_value].player1, online_account[i]) == 0){
+        // player1
+        sprintf(sendline[i], "You are player1, your color is black");
+        Write(connfd[i], sendline[i], strlen(sendline[i]));        
+        game_progressing(1, return_value);
+    }
+    else{
+        // player2
+        sprintf(sendline[i], "You are player2, your color is white");
+        Write(connfd[i], sendline[i], strlen(sendline[i]));
+        game_progressing(-1, return_value);
+    }
+    
 
+    // normal return
+    sem_wait(&is_used_sem);
+    is_used[i] = 0;
+    sem_post(&is_used_sem);
+    sem_post(&connfd_sem);
+    printf("=========================================\n");
+    pthread_exit(NULL);
 
     terminate_prematurely: printf("client %d terminated prematurely\n", i); // terminate prematurely
     sem_wait(&is_used_sem);
@@ -441,7 +618,9 @@ int main(){
     Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
     Listen(listenfd, LISTENQ);
     Signal(SIGCHLD, sig_chld);      /* must call waitpid() */
-
+    for(int aaa=0; aaa<10 ; aaa++){
+    	color[aaa] = 0;
+    }
     for(;;){
         printf("wait for connfd_sem\n");
         sem_wait(&connfd_sem);
