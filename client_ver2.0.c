@@ -532,6 +532,9 @@ void cli(FILE *fp, int sockfd){
             }
             else{
                 printf("Enter the game\n");
+                printf("Press Enter to continue...\n");
+                while (getchar() != '\n')
+                     ;
                 goto game;
                 // todo: enter the game
             }
@@ -555,7 +558,9 @@ void cli(FILE *fp, int sockfd){
                 n = Read(sockfd, recvline, MAXLINE);
                 recvline[n] = '\0';
                 printf("recv: %s\n", recvline);
-                
+                printf("Press Enter to continue...\n");
+                while (getchar() != '\n')
+                    ;
                 goto game;
             }
         }
@@ -582,7 +587,9 @@ void cli(FILE *fp, int sockfd){
                 }
                 else{
                     printf("Enter the game\n");
-                    
+                    printf("Press Enter to continue...\n");
+                    while (getchar() != '\n')
+                        ;
                    
                     goto game;
 
